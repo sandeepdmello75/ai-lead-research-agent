@@ -1,0 +1,242 @@
+{
+  "name": "AI Lead Research + Outreach Agent",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [0, 0],
+      "id": "node-1",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_URL_HERE",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "options": {
+          "returnFirstMatch": true
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [208, 0],
+      "id": "node-2",
+      "name": "Get row(s) in sheet",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [416, 0],
+      "id": "node-3",
+      "name": "Loop Over Items"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "name": "Replace Me",
+      "typeVersion": 1,
+      "position": [624, 208],
+      "id": "node-4"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apify.com/v2/acts/harvestapi~linkedin-company/run-sync-get-dataset-items?token=YOUR_APIFY_TOKEN_HERE",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"searches\": [\"{{ $json['Company Name'] }}\"]\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [624, -16],
+      "id": "node-5",
+      "name": "HTTP Request",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get LinkedIn data from Apify\nconst data = $input.item.json;\n\n// Extract clean fields\nconst company_name = data.name || 'Unknown Company';\nconst website = data.website || '';\nconst description = (data.description || '').slice(0, 500);\nconst industry = data.industries?.[0]?.title || 'Technology';\nconst employee_min = data.employeeCountRange?.start || '';\nconst employee_max = data.employeeCountRange?.end || '';\nconst employee_count = employee_min && employee_max\n  ? `${employee_min}-${employee_max}`\n  : 'Unknown';\nconst linkedin_url = data.linkedinUrl || '';\nconst location = data.locations?.[0]?.parsed?.text || '';\n\nreturn [{\n  json: {\n    company_name,\n    website,\n    description,\n    industry,\n    employee_count,\n    linkedin_url,\n    location\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [832, 48],
+      "id": "node-6",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_GROQ_API_KEY_HERE"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={   \"model\": \"llama-3.3-70b-versatile\",   \"messages\": [     {       \"role\": \"user\",       \"content\": \"Write a cold email from Sandeep to the hiring manager of {{ $json.company_name }}. Industry: {{ $json.industry }}. Employees: {{ $json.employee_count }}. Description: {{ $json.description }}. Ask for a 15 minute call. Return only JSON: {\\\"subject\\\": \\\"here\\\", \\\"body\\\": \\\"here\\\"}\"     }   ],   \"max_tokens\": 400 }",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [1040, 48],
+      "id": "node-7",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get Groq response\nconst data = $input.item.json;\n\n// Get email text\nconst rawText = data.choices[0].message.content;\n\n// Clean markdown\nconst cleaned = rawText\n  .replace(/```json\\n?/g, '')\n  .replace(/```\\n?/g, '')\n  .trim();\n\n// Parse email JSON\nlet emailData;\ntry {\n  emailData = JSON.parse(cleaned);\n} catch(e) {\n  emailData = {\n    subject: 'AI Engineering Opportunity',\n    body: cleaned\n  };\n}\n\n// Get company data from previous Code node\nconst prev = $('Code in JavaScript').first();\n\nreturn [{\n  json: {\n    subject: emailData.subject || 'AI Engineering Opportunity',\n    body: emailData.body || cleaned,\n    company_name: prev.json.company_name || '',\n    website: prev.json.website || '',\n    linkedin_url: prev.json.linkedin_url || '',\n    industry: prev.json.industry || ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1248, 48],
+      "id": "node-8",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "sendTo": "YOUR_EMAIL_HERE@gmail.com",
+        "subject": "=[REVIEW] {{ $json.subject }} — {{ $json.company_name }}",
+        "emailType": "text",
+        "message": "=Company: {{ $json.company_name }}\nWebsite: {{ $json.website }}\nLinkedIn: {{ $json.linkedin_url }}\nIndustry: {{ $json.industry }}\n\nSUBJECT:\n{{ $json.subject }}\n\nEMAIL BODY:\n{{ $json.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [1456, 48],
+      "id": "node-9",
+      "name": "Send a message",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "YOUR_GOOGLE_SHEET_URL_HERE",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Sheet1"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Status": "sent",
+            "Email Sent": "={{ $now.format('YYYY-MM-DD') }}"
+          },
+          "matchingColumns": ["Company Name"]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [1664, 48],
+      "id": "node-10",
+      "name": "Update Sheet Status",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_CREDENTIAL_ID",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [[{"node": "Get row(s) in sheet", "type": "main", "index": 0}]]
+    },
+    "Get row(s) in sheet": {
+      "main": [[{"node": "Loop Over Items", "type": "main", "index": 0}]]
+    },
+    "Loop Over Items": {
+      "main": [
+        [{"node": "HTTP Request", "type": "main", "index": 0}],
+        [{"node": "Replace Me", "type": "main", "index": 0}]
+      ]
+    },
+    "Replace Me": {
+      "main": [[{"node": "Loop Over Items", "type": "main", "index": 0}]]
+    },
+    "HTTP Request": {
+      "main": [[{"node": "Code in JavaScript", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript": {
+      "main": [[{"node": "HTTP Request1", "type": "main", "index": 0}]]
+    },
+    "HTTP Request1": {
+      "main": [[{"node": "Code in JavaScript1", "type": "main", "index": 0}]]
+    },
+    "Code in JavaScript1": {
+      "main": [[{"node": "Send a message", "type": "main", "index": 0}]]
+    },
+    "Send a message": {
+      "main": [[{"node": "Update Sheet Status", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
