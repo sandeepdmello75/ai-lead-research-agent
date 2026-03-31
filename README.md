@@ -1,5 +1,5 @@
  🤖 AI Lead Research + Outreach Agent
-
+linkedin:https://www.linkedin.com/in/sandeep-dmello-aa1a60301 
 An AI agent built with n8n that automatically researches companies on LinkedIn,
 generates personalized cold emails using Groq AI, and sends drafts to your Gmail
 for human review before sending.
