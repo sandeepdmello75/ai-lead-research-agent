@@ -1,0 +1,21 @@
+# Environment files
+.env
+.env.local
+.env.production
+
+# API keys files
+secrets.txt
+keys.txt
+credentials.txt
+api_keys.txt
+
+# n8n local data
+.n8n/
+n8n.env
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Node modules
+node_modules/
